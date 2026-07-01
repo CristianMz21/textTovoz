@@ -117,10 +117,52 @@ def build_notebook() -> nbf.NotebookNode:
             code(
                 """
                 import importlib
+                import importlib.util
                 import os
+                import subprocess
+                import sys
+                from pathlib import Path
 
                 os.environ["HF_HOME"] = "/content/.cache/huggingface"
                 model_id = "ResembleAI/Chatterbox-Multilingual-es-mx-latam"
+
+                # Self-heal: if the package is not importable (stale Colab cache
+                # or older notebook revision), clone + editable-install the repo
+                # right here. This makes the cell robust on its own.
+                if importlib.util.find_spec("texttovoz") is None:
+                    REPO_URL = "https://github.com/CristianMz21/textTovoz.git"
+                    REPO_BRANCH = "feat/texttovoz-tts-pipeline"
+                    REPO_DIR = Path("/content/textTovoz")
+                    if not (REPO_DIR / "src" / "texttovoz" / "__init__.py").exists():
+                        logger.info(
+                            "Cloning %s @ %s into %s", REPO_URL, REPO_BRANCH, REPO_DIR
+                        )
+                        subprocess.check_call(
+                            [
+                                "git",
+                                "clone",
+                                "--depth=1",
+                                "-b",
+                                REPO_BRANCH,
+                                REPO_URL,
+                                str(REPO_DIR),
+                            ]
+                        )
+                    else:
+                        logger.info("Reusing existing clone at %s", REPO_DIR)
+                    subprocess.check_call(
+                        [
+                            sys.executable,
+                            "-m",
+                            "pip",
+                            "install",
+                            "-q",
+                            "-e",
+                            str(REPO_DIR),
+                        ]
+                    )
+                    importlib.invalidate_caches()
+                    logger.info("texttovoz package installed.")
 
                 hf_hub = importlib.import_module("huggingface_hub")
                 logger.info("Pre-warming Hugging Face cache at %s", os.environ["HF_HOME"])
