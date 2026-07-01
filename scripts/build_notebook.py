@@ -45,6 +45,7 @@ def build_notebook() -> nbf.NotebookNode:
                 import logging
                 import subprocess
                 import sys
+                from pathlib import Path
 
                 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
                 logger = logging.getLogger("texttovoz.notebook")
@@ -57,6 +58,36 @@ def build_notebook() -> nbf.NotebookNode:
                     )
                     raise RuntimeError("Python 3.10+ is required for TextTovoz.")
 
+                # 1. Clone the texttovoz repo so the local package can be imported.
+                #    Pin the branch that contains the pipeline implementation.
+                #    After the PR is merged to main, change REPO_BRANCH to "main".
+                REPO_URL = "https://github.com/CristianMz21/textTovoz.git"
+                REPO_BRANCH = "feat/texttovoz-tts-pipeline"
+                REPO_DIR = Path("/content/textTovoz")
+
+                if not (REPO_DIR / "src" / "texttovoz" / "__init__.py").exists():
+                    logger.info("Cloning %s @ %s into %s", REPO_URL, REPO_BRANCH, REPO_DIR)
+                    subprocess.check_call(
+                        [
+                            "git",
+                            "clone",
+                            "--depth=1",
+                            "-b",
+                            REPO_BRANCH,
+                            REPO_URL,
+                            str(REPO_DIR),
+                        ]
+                    )
+                else:
+                    logger.info("Reusing existing clone at %s", REPO_DIR)
+
+                # 2. Install the local package editable so subsequent cells can
+                #    `import texttovoz`.
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "-q", "-e", str(REPO_DIR)]
+                )
+
+                # 3. Install Colab runtime dependencies.
                 packages = [
                     "chatterbox-tts==0.1.7",
                     "torch",
@@ -67,7 +98,7 @@ def build_notebook() -> nbf.NotebookNode:
                     "tqdm",
                     "ipython",
                 ]
-                subprocess.check_call([sys.executable, "-m", "pip", "install", *packages])
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *packages])
 
                 torch = importlib.import_module("torch")
                 if not torch.cuda.is_available():
