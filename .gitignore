@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / build
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+profile_default/
+*/.ipynb_checkpoints/
+
+# Secrets / local config
+.env
+.env.local
+.envrc
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# gentle-ai skill registry cache (regenerate with
+# `gentle-ai skill-registry refresh --force` — do not commit)
+/.atl/
