@@ -117,7 +117,31 @@ def build_notebook() -> nbf.NotebookNode:
                         + ls
                     )
 
-                # 2. Install Colab runtime dependencies. We do this BEFORE the
+                # 2. Aggressively wipe any stale texttovoz caches that may shadow
+                #    the freshly cloned source. This guards against the
+                #    'IndentationError on line 45' failure mode that happens
+                #    when a partial prior install leaves a corrupt tokenize.py
+                #    in site-packages.
+                import glob
+
+                for pycache in glob.glob(
+                    str(REPO_DIR / "**" / "__pycache__"), recursive=True
+                ):
+                    shutil.rmtree(pycache, ignore_errors=True)
+                for pyc in glob.glob(str(REPO_DIR / "**" / "*.pyc"), recursive=True):
+                    try:
+                        os.remove(pyc)
+                    except OSError:
+                        pass
+
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", "-y", "texttovoz"],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+                # 3. Install Colab runtime dependencies. We do this BEFORE the
                 #    editable install so pip can resolve chatterbox-tts first
                 #    (it pulls torch/torchaudio/transformers as transitives).
                 packages = [
@@ -136,11 +160,11 @@ def build_notebook() -> nbf.NotebookNode:
                     [sys.executable, "-m", "pip", "install", *packages]
                 )
 
-                # 3. Install the local package editable, using `cwd` and `.` to
+                # 4. Install the local package editable, using `cwd` and `.` to
                 #    avoid absolute-path edge cases. Done last so chatterbox-tts
                 #    is resolved before our own package overlays site-packages.
                 subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", "-e", "."],
+                    [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-e", "."],
                     cwd=str(REPO_DIR),
                 )
 
