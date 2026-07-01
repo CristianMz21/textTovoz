@@ -69,7 +69,7 @@ def build_notebook() -> nbf.NotebookNode:
                 #    Pin the branch that contains the pipeline implementation.
                 #    After the PR is merged to main, change REPO_BRANCH to "main".
                 REPO_URL = "https://github.com/CristianMz21/textTovoz.git"
-                REPO_BRANCH = "feat/texttovoz-tts-pipeline"
+                REPO_BRANCH = "main"
                 REPO_DIR = Path("/content/textTovoz")
 
                 def _clone_repo() -> None:
