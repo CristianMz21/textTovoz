@@ -42,6 +42,7 @@ def build_notebook() -> nbf.NotebookNode:
             code(
                 """
                 import importlib
+                import importlib.util
                 import logging
                 import subprocess
                 import sys
@@ -81,24 +82,41 @@ def build_notebook() -> nbf.NotebookNode:
                 else:
                     logger.info("Reusing existing clone at %s", REPO_DIR)
 
-                # 2. Install the local package editable so subsequent cells can
-                #    `import texttovoz`.
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", "-q", "-e", str(REPO_DIR)]
-                )
-
-                # 3. Install Colab runtime dependencies.
+                # 2. Install Colab runtime dependencies. We do this BEFORE the
+                #    editable install so pip can resolve chatterbox-tts first
+                #    (it pulls torch/torchaudio/transformers as transitives).
                 packages = [
                     "chatterbox-tts==0.1.7",
                     "torch",
                     "torchaudio",
+                    "huggingface_hub",
+                    "numpy",
                     "soundfile",
                     "pydantic",
                     "pyyaml",
                     "tqdm",
                     "ipython",
                 ]
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *packages])
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", *packages]
+                )
+
+                # 3. Install the local package editable so subsequent cells can
+                #    `import texttovoz`. Done last so chatterbox-tts is resolved
+                #    before our own (lightweight) package overlays site-packages.
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "-e", str(REPO_DIR)]
+                )
+
+                # 4. Verify both the local package and the heavy deps import.
+                importlib.invalidate_caches()
+                tv_spec = importlib.util.find_spec("texttovoz")
+                if tv_spec is None:
+                    raise RuntimeError(
+                        "texttovoz package not importable after editable install. "
+                        f"Check that {REPO_DIR}/src/texttovoz/__init__.py exists."
+                    )
+                logger.info("texttovoz package location: %s", tv_spec.origin)
 
                 torch = importlib.import_module("torch")
                 if not torch.cuda.is_available():
@@ -151,18 +169,26 @@ def build_notebook() -> nbf.NotebookNode:
                     else:
                         logger.info("Reusing existing clone at %s", REPO_DIR)
                     subprocess.check_call(
-                        [
-                            sys.executable,
-                            "-m",
-                            "pip",
-                            "install",
-                            "-q",
-                            "-e",
-                            str(REPO_DIR),
-                        ]
+                        [sys.executable, "-m", "pip", "install", "-e", str(REPO_DIR)]
                     )
                     importlib.invalidate_caches()
-                    logger.info("texttovoz package installed.")
+                    tv_spec = importlib.util.find_spec("texttovoz")
+                    if tv_spec is None:
+                        raise RuntimeError(
+                            "texttovoz package still not importable after pip install -e."
+                        )
+                    logger.info("texttovoz package location: %s", tv_spec.origin)
+                else:
+                    logger.info("texttovoz package already importable.")
+
+                if importlib.util.find_spec("huggingface_hub") is None:
+                    logger.warning(
+                        "huggingface_hub not importable; installing it before model download."
+                    )
+                    subprocess.check_call(
+                        [sys.executable, "-m", "pip", "install", "huggingface_hub"]
+                    )
+                    importlib.invalidate_caches()
 
                 hf_hub = importlib.import_module("huggingface_hub")
                 logger.info("Pre-warming Hugging Face cache at %s", os.environ["HF_HOME"])
