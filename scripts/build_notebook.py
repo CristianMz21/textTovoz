@@ -35,8 +35,12 @@ def build_notebook() -> nbf.NotebookNode:
     }
     notebook["cells"] = [
         nbf.v4.new_markdown_cell(
-            "# TextTovoz TTS Pipeline\n\n"
-            "**Personal use only. AI-generated audio. Do not redistribute.**"
+            "# TextTovoz TTS Pipeline (v3.0 — robust install)\n\n"
+            "**Personal use only. AI-generated audio. Do not redistribute.**\n\n"
+            "_If you do not see the `(v3.0 — robust install)` marker above, "
+            "your Colab tab is serving a cached older revision. Hard-refresh "
+            "the browser (Ctrl+Shift+R) and reopen the notebook, or use "
+            "File > Open notebook > GitHub to force a fresh fetch._"
         ),
         nbf.v4.new_code_cell(
             code(
@@ -140,7 +144,9 @@ def build_notebook() -> nbf.NotebookNode:
                     cwd=str(REPO_DIR),
                 )
 
-                # 4. Verify both the local package and the heavy deps import.
+                # 4. Verify the local package is importable. We do NOT raise here — Cell 2
+                #    has its own self-healing install path and will repair any
+                #    residual problem with the package.
                 importlib.invalidate_caches()
                 tv_spec = importlib.util.find_spec("texttovoz")
                 if tv_spec is None:
@@ -149,11 +155,15 @@ def build_notebook() -> nbf.NotebookNode:
                         capture_output=True,
                         text=True,
                     )
-                    raise RuntimeError(
-                        "texttovoz package not importable after editable install.\\n"
-                        f"pip show output:\\n{show.stdout}\\n{show.stderr}"
+                    logger.warning(
+                        "texttovoz package not yet importable after editable install; "
+                        "Cell 2 will attempt a self-heal.\\n"
+                        "pip show output:\\n%s\\n%s",
+                        show.stdout,
+                        show.stderr,
                     )
-                logger.info("texttovoz package location: %s", tv_spec.origin)
+                else:
+                    logger.info("texttovoz package location: %s", tv_spec.origin)
 
                 torch = importlib.import_module("torch")
                 if not torch.cuda.is_available():
