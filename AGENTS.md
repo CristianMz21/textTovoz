@@ -39,6 +39,16 @@ Work lives in `notebooks/*.ipynb`.
   `git config user.email "<you>@users.noreply.github.com"` if you need a
   different one.
 
+## Verification
+
+```bash
+ruff check .
+ruff format --check .
+pytest -q
+pytest -q tests/test_pipeline_smoke.py
+python scripts/validate_manifest.py chunks/manifest.jsonl
+```
+
 ## Workspace context
 
 - Lives at `~/Projectos/Learning/textTovoz/`. The parent `Learning/` is a

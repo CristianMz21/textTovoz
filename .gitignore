@@ -33,6 +33,14 @@ profile_default/
 .idea/
 *.swp
 
+# Test/coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # gentle-ai skill registry cache (regenerate with
 # `gentle-ai skill-registry refresh --force` — do not commit)
 /.atl/
