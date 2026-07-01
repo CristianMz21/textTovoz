@@ -44,6 +44,8 @@ def build_notebook() -> nbf.NotebookNode:
                 import importlib
                 import importlib.util
                 import logging
+                import os
+                import shutil
                 import subprocess
                 import sys
                 from pathlib import Path
@@ -66,7 +68,10 @@ def build_notebook() -> nbf.NotebookNode:
                 REPO_BRANCH = "feat/texttovoz-tts-pipeline"
                 REPO_DIR = Path("/content/textTovoz")
 
-                if not (REPO_DIR / "src" / "texttovoz" / "__init__.py").exists():
+                def _clone_repo() -> None:
+                    if REPO_DIR.exists():
+                        logger.info("Removing stale %s", REPO_DIR)
+                        shutil.rmtree(REPO_DIR)
                     logger.info("Cloning %s @ %s into %s", REPO_URL, REPO_BRANCH, REPO_DIR)
                     subprocess.check_call(
                         [
@@ -79,8 +84,34 @@ def build_notebook() -> nbf.NotebookNode:
                             str(REPO_DIR),
                         ]
                     )
+
+                # Ensure a fresh, complete clone every run. Reusing a partial
+                # clone is the most common cause of the
+                # 'texttovoz package not importable' failure.
+                required_paths = [
+                    REPO_DIR / "src" / "texttovoz" / "__init__.py",
+                    REPO_DIR / "src" / "texttovoz" / "tts.py",
+                    REPO_DIR / "src" / "texttovoz" / "pipeline.py",
+                    REPO_DIR / "pyproject.toml",
+                ]
+                if not all(p.exists() for p in required_paths):
+                    _clone_repo()
                 else:
                     logger.info("Reusing existing clone at %s", REPO_DIR)
+
+                # Last-chance verification: list the directory and bail with a
+                # clear error if the expected files are still missing.
+                missing = [str(p) for p in required_paths if not p.exists()]
+                if missing:
+                    ls = subprocess.check_output(
+                        ["ls", "-la", str(REPO_DIR / "src" / "texttovoz")]
+                    ).decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        "texttovoz clone is incomplete. Missing:\\n  "
+                        + "\\n  ".join(missing)
+                        + "\\nRepo contents:\\n"
+                        + ls
+                    )
 
                 # 2. Install Colab runtime dependencies. We do this BEFORE the
                 #    editable install so pip can resolve chatterbox-tts first
@@ -101,20 +132,26 @@ def build_notebook() -> nbf.NotebookNode:
                     [sys.executable, "-m", "pip", "install", *packages]
                 )
 
-                # 3. Install the local package editable so subsequent cells can
-                #    `import texttovoz`. Done last so chatterbox-tts is resolved
-                #    before our own (lightweight) package overlays site-packages.
+                # 3. Install the local package editable, using `cwd` and `.` to
+                #    avoid absolute-path edge cases. Done last so chatterbox-tts
+                #    is resolved before our own package overlays site-packages.
                 subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", "-e", str(REPO_DIR)]
+                    [sys.executable, "-m", "pip", "install", "-e", "."],
+                    cwd=str(REPO_DIR),
                 )
 
                 # 4. Verify both the local package and the heavy deps import.
                 importlib.invalidate_caches()
                 tv_spec = importlib.util.find_spec("texttovoz")
                 if tv_spec is None:
+                    show = subprocess.run(
+                        [sys.executable, "-m", "pip", "show", "texttovoz"],
+                        capture_output=True,
+                        text=True,
+                    )
                     raise RuntimeError(
-                        "texttovoz package not importable after editable install. "
-                        f"Check that {REPO_DIR}/src/texttovoz/__init__.py exists."
+                        "texttovoz package not importable after editable install.\\n"
+                        f"pip show output:\\n{show.stdout}\\n{show.stderr}"
                     )
                 logger.info("texttovoz package location: %s", tv_spec.origin)
 
