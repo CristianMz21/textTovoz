@@ -70,19 +70,22 @@ def build_notebook() -> nbf.NotebookNode:
                 # This mirrors the convention of a professional Python script:
                 # requirements are declared and installed up front.
                 #
-                # Colab's base image pre-installs a torch/torchvision pair that
-                # is often out of sync with the rest of the ML stack. Uninstall
-                # them first, then pin a known-compatible set (torch 2.6.0,
-                # torchvision 0.21.0, torchaudio 2.6.0) before installing
-                # chatterbox-tts==0.1.7 from PyPI (the multilingual V2 model
-                # with 23+ languages including Spanish).
-                !pip install -q --upgrade pip
-                !pip uninstall -y -q torch torchvision torchaudio transformers
-                !pip install -q torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
-                !pip install -q transformers==5.2.0
-                !pip install -q chatterbox-tts==0.1.7
-                !pip install -q huggingface_hub soundfile
-                !pip install -q 'pydantic>=2' pyyaml tqdm ipython
+                # Colab's base image pre-installs torch/torchvision plus a few
+                # transformer-ecosystem packages (sentence-transformers, peft)
+                # that hold transformers at incompatible versions. Uninstall
+                # them all first, then pin a known-compatible set (torch 2.6.0,
+                # torchvision 0.21.0, torchaudio 2.6.0, transformers 5.2.0)
+                # before installing chatterbox-tts==0.1.7 from PyPI (the
+                # multilingual V2 model with 23+ languages including Spanish).
+                # No -q on pip install so resolver warnings surface in the log.
+                !pip install --upgrade pip
+                !pip uninstall -y torch torchvision torchaudio transformers
+                !pip uninstall -y sentence-transformers peft
+                !pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
+                !pip install transformers==5.2.0
+                !pip install chatterbox-tts==0.1.7
+                !pip install huggingface_hub soundfile
+                !pip install 'pydantic>=2' pyyaml tqdm ipython
                 """
             )
         ),
@@ -123,6 +126,16 @@ def build_notebook() -> nbf.NotebookNode:
                 subprocess.check_call(
                     [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-e", "."],
                     cwd=str(REPO_DIR),
+                )
+
+                # Verify the freshly installed package has the current schema.
+                # If t3_model is missing, the clone is from an old commit and
+                # the rest of the notebook will fail.
+                subprocess.check_call(
+                    [sys.executable, "-c",
+                     "from texttovoz.config import TTSConfig; import dataclasses; "
+                     "fields = {f.name for f in dataclasses.fields(TTSConfig)}; "
+                     "assert 't3_model' in fields, f't3_model missing, fields={fields}'"],
                 )
 
                 # Belt-and-suspenders: add src/ to sys.path directly. Some
