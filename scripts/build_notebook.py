@@ -335,10 +335,21 @@ def build_notebook() -> nbf.NotebookNode:
                 from google.colab import files
 
                 uploaded = files.upload()
-                if "subtitle.txt" not in uploaded:
-                    raise RuntimeError("Please upload a file named subtitle.txt.")
+                if not uploaded:
+                    raise RuntimeError("Upload was cancelled or produced no files.")
 
-                Path("/content/subtitle.txt").write_bytes(uploaded["subtitle.txt"])
+                # Colab may rename a re-uploaded file (e.g. 'subtitle (1).txt'),
+                # so accept any *.txt or matching prefix.
+                candidates = [k for k in uploaded if k.lower().endswith(".txt")]
+                if not candidates:
+                    raise RuntimeError(
+                        f"Please upload a .txt file. Got: {list(uploaded)}"
+                    )
+                chosen = next(
+                    (k for k in candidates if "subtitle" in k.lower()), candidates[0]
+                )
+                logger.info("Using uploaded file: %s", chosen)
+                Path("/content/subtitle.txt").write_bytes(uploaded[chosen])
                 logger.info("Saved transcript to /content/subtitle.txt")
                 """
             )
