@@ -14,16 +14,15 @@ def test_stub_tts_returns_one_second_of_silence(stub_config: TTSConfig) -> None:
     assert len(audio) == stub_config.sample_rate
 
 
-def test_chatterbox_from_pretrained_forwards_t3_model(monkeypatch) -> None:
+def test_chatterbox_from_pretrained_forwards_device(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
     class FakeChatterboxMultilingualTTS:
         sr = 24_000
 
         @classmethod
-        def from_pretrained(cls, *, device: str, t3_model: str | None = None):
+        def from_pretrained(cls, device: str):
             calls["device"] = device
-            calls["t3_model"] = t3_model
             return cls()
 
         def generate(self, text: str, *, language_id: str, **kwargs):
@@ -37,9 +36,11 @@ def test_chatterbox_from_pretrained_forwards_t3_model(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "chatterbox.mtl_tts", mtl_tts_module)
 
     config = TTSConfig(t3_model="v3", language_id="es")
+    # t3_model is accepted for forward compat but the 0.1.7 from_pretrained
+    # signature only takes device, so the wrapper must NOT pass it through.
     tts = ChatterboxTTS.from_pretrained("es", "cuda", t3_model="v3", config=config)
     tts.generate("Hola")
 
     assert calls["device"] == "cuda"
-    assert calls["t3_model"] == "v3"
+    assert "t3_model" not in calls  # 0.1.7 does not accept it
     assert calls["language_id"] == "es"

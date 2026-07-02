@@ -1,11 +1,15 @@
 """Lightweight TTS wrappers for Chatterbox and local smoke tests.
 
-Targets chatterbox-tts installed from the master branch (not the 0.1.7
-PyPI release, which hardcodes the English-only model). The master
-API is ``ChatterboxMultilingualTTS.from_pretrained(device, t3_model=...)``
-where ``t3_model`` selects which file inside the unified
-``ResembleAI/chatterbox`` Hugging Face repo to load. For multilingual
-Spanish we use ``t3_model="v3"`` plus ``language_id="es"``.
+Targets the ``chatterbox-tts==0.1.7`` PyPI release. That release exposes
+``ChatterboxMultilingualTTS.from_pretrained(device)`` (no repo or
+``t3_model`` argument — the unified ``ResembleAI/chatterbox`` Hugging
+Face repo is hardcoded and only the V2 multilingual checkpoint is
+available). The wrapper still accepts ``t3_model`` for forward
+compatibility, but 0.1.7 ignores it.
+
+The multilingual V2 model supports 23+ languages including Spanish
+(``language_id="es"``), which is the only language_id we need for this
+project.
 
 Chatterbox parameter ranges verified during exploration:
 
@@ -44,13 +48,12 @@ def is_available() -> bool:
 
 @dataclass(slots=True)
 class ChatterboxTTS:
-    """Thin lazy wrapper around ``ChatterboxMultilingualTTS`` (master API).
+    """Thin lazy wrapper around ``ChatterboxMultilingualTTS`` (0.1.7 API).
 
-    Selects a model inside the unified ``ResembleAI/chatterbox`` Hugging
-    Face repo by passing ``t3_model`` (e.g. ``"v3"``). The wrapper itself
-    does not pick a HF repo id; that lives in the chatterbox library.
-    Generation calls always pass ``language_id`` so the model can pick the
-    right tokenizer.
+    0.1.7 only exposes ``from_pretrained(device)`` — it loads the unified
+    ``ResembleAI/chatterbox`` repo and the V2 multilingual checkpoint.
+    The wrapper accepts ``t3_model`` for forward compatibility (the
+    master branch uses it) but does not pass it through to 0.1.7.
     """
 
     model: _ChatterboxModel
@@ -62,22 +65,20 @@ class ChatterboxTTS:
         language_id: str,
         device: str,
         *,
-        t3_model: str = "v3",
+        t3_model: str = "v2",  # noqa: ARG003 - kept for forward compat
         config: TTSConfig | None = None,
     ) -> ChatterboxTTS:
-        """Load Chatterbox lazily using the master ``from_pretrained`` API.
+        """Load Chatterbox lazily using the 0.1.7 ``from_pretrained`` API.
 
         ``language_id`` should be a code the multilingual model supports
-        (e.g. ``"es"`` for Spanish). ``t3_model`` selects the checkpoint
-        variant inside the unified HF repo (default ``"v3"``).
+        (e.g. ``"es"`` for Spanish). The ``t3_model`` argument is
+        accepted for forward compatibility but is ignored by 0.1.7.
         """
 
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
         effective_config = config or TTSConfig(language_id=language_id)
-        model = ChatterboxMultilingualTTS.from_pretrained(
-            device=device, t3_model=t3_model
-        )
+        model = ChatterboxMultilingualTTS.from_pretrained(device=device)
         return cls(model=model, config=effective_config)
 
     def generate(self, text: str) -> tuple[Any, int]:
