@@ -1,5 +1,20 @@
 """Build the Colab notebook for the TextTovoz TTS pipeline.
 
+The notebook is structured like a professional script:
+
+  Cell 1  pip install (runtime dependencies)
+  Cell 2  git clone + pip install -e (local texttovoz package)
+  Cell 3  import statements
+  Cell 4  configuration (paths, model id, language id)
+  Cell 5  environment verification (Python, GPU, package)
+  Cell 6  Hugging Face cache pre-warm
+  Cell 7  markdown: "Upload transcript"
+  Cell 8  upload widget
+  Cell 9  preview (first 2 chunks)
+  Cell 10 full run
+  Cell 11 export and inline audio playback
+  Cell 12 markdown: disclaimer
+
 This script constructs `notebooks/tts_pipeline.ipynb` with nbformat so the
 notebook is deterministic and remains valid Jupyter Notebook 7+ JSON.
 """
@@ -34,337 +49,206 @@ def build_notebook() -> nbf.NotebookNode:
         "language_info": {"name": "python", "pygments_lexer": "ipython3"},
     }
     notebook["cells"] = [
+        # ------------------------------------------------------------------
+        # Title
+        # ------------------------------------------------------------------
         nbf.v4.new_markdown_cell(
-            "# TextTovoz TTS Pipeline (v3.0 — robust install)\n\n"
+            "# TextTovoz TTS Pipeline (v3.1 — install/setup/exec split)\n\n"
             "**Personal use only. AI-generated audio. Do not redistribute.**\n\n"
-            "_If you do not see the `(v3.0 — robust install)` marker above, "
-            "your Colab tab is serving a cached older revision. Hard-refresh "
-            "the browser (Ctrl+Shift+R) and reopen the notebook, or use "
-            "File > Open notebook > GitHub to force a fresh fetch._"
+            "_If you do not see the `(v3.1)` marker above, your Colab tab is "
+            "serving a cached older revision. Hard-refresh the browser "
+            "(Ctrl+Shift+R) and reopen the notebook._"
         ),
+        # ------------------------------------------------------------------
+        # Cell 1 — pip install (runtime dependencies only)
+        # ------------------------------------------------------------------
         nbf.v4.new_code_cell(
             code(
                 """
-                import importlib
-                import importlib.util
-                import logging
-                import os
+                # Cell 1: install runtime dependencies via pip.
+                # No logic, no imports, no config — strictly package installation.
+                # This mirrors the convention of a professional Python script:
+                # requirements are declared and installed up front.
+                !pip install -q --upgrade pip
+                !pip install -q chatterbox-tts==0.1.7 huggingface_hub soundfile
+                !pip install -q 'pydantic>=2' pyyaml tqdm ipython
+                """
+            )
+        ),
+        # ------------------------------------------------------------------
+        # Cell 2 — clone the local repo and install the texttovoz package
+        # ------------------------------------------------------------------
+        nbf.v4.new_code_cell(
+            code(
+                """
+                # Cell 2: clone the textTovoz repo and pip install the local
+                # package editable. Runs after Cell 1 so chatterbox-tts is
+                # already on the system.
                 import shutil
                 import subprocess
                 import sys
                 from pathlib import Path
 
-                logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
-                logger = logging.getLogger("texttovoz.notebook")
-
-                min_python = (3, 10)
-                if sys.version_info[:2] < min_python:
-                    logger.error(
-                        "Python 3.10+ is required. Runtime is %s",
-                        sys.version.split()[0],
-                    )
-                    raise RuntimeError("Python 3.10+ is required for TextTovoz.")
-
-                # 1. Clone the texttovoz repo so the local package can be imported.
-                #    Pin the branch that contains the pipeline implementation.
-                #    After the PR is merged to main, change REPO_BRANCH to "main".
                 REPO_URL = "https://github.com/CristianMz21/textTovoz.git"
                 REPO_BRANCH = "main"
                 REPO_DIR = Path("/content/textTovoz")
 
-                def _clone_repo() -> None:
-                    if REPO_DIR.exists():
-                        logger.info("Removing stale %s", REPO_DIR)
-                        shutil.rmtree(REPO_DIR)
-                    logger.info("Cloning %s @ %s into %s", REPO_URL, REPO_BRANCH, REPO_DIR)
-                    subprocess.check_call(
-                        [
-                            "git",
-                            "clone",
-                            "--depth=1",
-                            "-b",
-                            REPO_BRANCH,
-                            REPO_URL,
-                            str(REPO_DIR),
-                        ]
-                    )
-
-                # Always remove any pre-existing clone and re-clone from scratch.
-                # Reusing a prior clone was the source of the
-                # 'stale tokenize.py with old except clause' failure mode
-                # where a previous Cell 1 left files behind that the new
-                # branch's pip install -e only registered but did not
-                # overwrite on disk.
-                _clone_repo()
-
-                # Last-chance verification: list the directory and bail with a
-                # clear error if the expected files are still missing.
-                required_paths = [
-                    REPO_DIR / "src" / "texttovoz" / "__init__.py",
-                    REPO_DIR / "src" / "texttovoz" / "tts.py",
-                    REPO_DIR / "src" / "texttovoz" / "pipeline.py",
-                    REPO_DIR / "pyproject.toml",
-                ]
-                missing = [str(p) for p in required_paths if not p.exists()]
-                if missing:
-                    ls = subprocess.check_output(
-                        ["ls", "-la", str(REPO_DIR / "src" / "texttovoz")]
-                    ).decode("utf-8", errors="replace")
-                    raise RuntimeError(
-                        "texttovoz clone is incomplete. Missing:\\n  "
-                        + "\\n  ".join(missing)
-                        + "\\nRepo contents:\\n"
-                        + ls
-                    )
-
-                # 2. Aggressively wipe any stale texttovoz caches that may shadow
-                #    the freshly cloned source. This guards against the
-                #    'IndentationError on line 45' failure mode that happens
-                #    when a partial prior install leaves a corrupt tokenize.py
-                #    in site-packages.
-                import glob
-
-                for pycache in glob.glob(
-                    str(REPO_DIR / "**" / "__pycache__"), recursive=True
-                ):
-                    shutil.rmtree(pycache, ignore_errors=True)
-                for pyc in glob.glob(str(REPO_DIR / "**" / "*.pyc"), recursive=True):
-                    try:
-                        os.remove(pyc)
-                    except OSError:
-                        pass
-
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "uninstall", "-y", "texttovoz"],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-
-                # 3. Uninstall any pre-existing ML stack so chatterbox-tts can
-                #    pin a consistent set of torch/torchvision/torchaudio/
-                #    transformers. A stale torchvision on the Colab base image
-                #    paired with a freshly installed torch causes
-                #    'operator torchvision::nms does not exist' at import time.
-                subprocess.run(
-                    [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "uninstall",
-                        "-y",
-                        "torch",
-                        "torchvision",
-                        "torchaudio",
-                        "transformers",
-                    ],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-
-                # 4. Install chatterbox-tts first so it pins the ML stack
-                #    internally to versions it was tested against.
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", "chatterbox-tts==0.1.7"]
-                )
-
-                # 5. Other runtime deps that are not in the ML stack.
+                # Always wipe any prior clone to guarantee fresh source.
+                if REPO_DIR.exists():
+                    shutil.rmtree(REPO_DIR)
                 subprocess.check_call(
                     [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "install",
-                        "huggingface_hub",
-                        "soundfile",
-                        "pydantic",
-                        "pyyaml",
-                        "tqdm",
-                        "ipython",
+                        "git",
+                        "clone",
+                        "--depth=1",
+                        "-b",
+                        REPO_BRANCH,
+                        REPO_URL,
+                        str(REPO_DIR),
                     ]
                 )
 
-                # 4. Install the local package editable, using `cwd` and `.` to
-                #    avoid absolute-path edge cases. Done last so chatterbox-tts
-                #    is resolved before our own package overlays site-packages.
+                # Editable install of the local package.
                 subprocess.check_call(
                     [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-e", "."],
                     cwd=str(REPO_DIR),
                 )
 
-                # 4. Verify the local package is importable. We do NOT raise here — Cell 2
-                #    has its own self-healing install path and will repair any
-                #    residual problem with the package.
-                importlib.invalidate_caches()
-                # Belt-and-suspenders: add the source dir to sys.path directly
-                # so the package is importable even if the editable-install .pth
-                # file generated by pip is not consulted by this kernel.
+                # Belt-and-suspenders: add src/ to sys.path directly. Some
+                # Colab runtimes do not consult the editable-install .pth file.
                 src_path = str(REPO_DIR / "src")
                 if src_path not in sys.path:
                     sys.path.insert(0, src_path)
-                importlib.invalidate_caches()
-                tv_spec = importlib.util.find_spec("texttovoz")
-                if tv_spec is None:
-                    show = subprocess.run(
-                        [sys.executable, "-m", "pip", "show", "-f", "texttovoz"],
-                        capture_output=True,
-                        text=True,
-                    )
-                    logger.warning(
-                        "texttovoz package not yet importable after editable install; "
-                        "Cell 2 will attempt a self-heal.\\n"
-                        "pip show -f output:\\n%s\\n%s",
-                        show.stdout,
-                        show.stderr,
-                    )
-                else:
-                    logger.info("texttovoz package location: %s", tv_spec.origin)
-
-                torch = importlib.import_module("torch")
-                if not torch.cuda.is_available():
-                    logger.error("No GPU detected. In Colab, choose a T4 GPU runtime.")
-                    raise RuntimeError("A CUDA GPU is required for Chatterbox TTS.")
-
-                logger.info(
-                    "Dependency check passed with Python %s and GPU %s",
-                    sys.version.split()[0],
-                    torch.cuda.get_device_name(0),
-                )
                 """
             )
         ),
+        # ------------------------------------------------------------------
+        # Cell 3 — imports (project + stdlib)
+        # ------------------------------------------------------------------
         nbf.v4.new_code_cell(
             code(
                 """
-                import importlib
-                import importlib.util
+                # Cell 3: imports. Stdlib first, then third-party, then local.
+                import logging
                 import os
-                import subprocess
                 import sys
+                from dataclasses import replace
                 from pathlib import Path
 
-                os.environ["HF_HOME"] = "/content/.cache/huggingface"
-                model_id = "ResembleAI/Chatterbox-Multilingual-es-mx-latam"
-
-                # Self-heal: if the package is not importable (stale Colab cache
-                # or older notebook revision), clone + editable-install the repo
-                # right here. This makes the cell robust on its own.
-                if importlib.util.find_spec("texttovoz") is None:
-                    REPO_URL = "https://github.com/CristianMz21/textTovoz.git"
-                    REPO_BRANCH = "main"
-                    REPO_DIR = Path("/content/textTovoz")
-                    if not (REPO_DIR / "src" / "texttovoz" / "__init__.py").exists():
-                        logger.info(
-                            "Cloning %s @ %s into %s", REPO_URL, REPO_BRANCH, REPO_DIR
-                        )
-                        subprocess.check_call(
-                            [
-                                "git",
-                                "clone",
-                                "--depth=1",
-                                "-b",
-                                REPO_BRANCH,
-                                REPO_URL,
-                                str(REPO_DIR),
-                            ]
-                        )
-                    else:
-                        logger.info("Reusing existing clone at %s", REPO_DIR)
-                    subprocess.check_call(
-                        [sys.executable, "-m", "pip", "install", "-e", str(REPO_DIR)]
-                    )
-                    importlib.invalidate_caches()
-                    # Belt-and-suspenders: also add the source dir to sys.path
-                    # directly. In some Colab runtimes the editable-install
-                    # .pth file is generated but not consulted by importlib;
-                    # this guarantees the package is reachable.
-                    src_path = str(REPO_DIR / "src")
-                    if src_path not in sys.path:
-                        sys.path.insert(0, src_path)
-                    importlib.invalidate_caches()
-                    tv_spec = importlib.util.find_spec("texttovoz")
-                    if tv_spec is None:
-                        show = subprocess.run(
-                            [
-                                sys.executable,
-                                "-m",
-                                "pip",
-                                "show",
-                                "-f",
-                                "texttovoz",
-                            ],
-                            capture_output=True,
-                            text=True,
-                        )
-                        raise RuntimeError(
-                            "texttovoz package still not importable after pip install -e.\\n"
-                            f"sys.path[0:5]: {sys.path[:5]}\\n"
-                            f"pip show -f output:\\n{show.stdout}\\n{show.stderr}"
-                        )
-                    logger.info("texttovoz package location: %s", tv_spec.origin)
-                else:
-                    logger.info("texttovoz package already importable.")
-
-                if importlib.util.find_spec("huggingface_hub") is None:
-                    logger.warning(
-                        "huggingface_hub not importable; installing it before model download."
-                    )
-                    subprocess.check_call(
-                        [sys.executable, "-m", "pip", "install", "huggingface_hub"]
-                    )
-                    importlib.invalidate_caches()
-
-                hf_hub = importlib.import_module("huggingface_hub")
-                logger.info("Pre-warming Hugging Face cache at %s", os.environ["HF_HOME"])
-                hf_hub.snapshot_download(repo_id=model_id)
-
-                tts_module = importlib.import_module("texttovoz.tts")
-                if not tts_module.is_available():
-                    raise RuntimeError("Chatterbox import check failed after installation.")
-                logger.info("Hugging Face cache and Chatterbox import check completed.")
-                """
-            )
-        ),
-        nbf.v4.new_code_cell(
-            code(
-                """
-                from pathlib import Path
+                from huggingface_hub import snapshot_download
+                from IPython.display import Audio, display
 
                 from texttovoz import config, manifest, pipeline
+                from texttovoz.config import TTSConfig
 
-                cfg = config.TTSConfig(
-                    input_path=Path("/content/subtitle.txt"),
-                    chunks_dir=Path("/content/out/chunks"),
-                    output_dir=Path("/content/out"),
-                    manifest_path=Path("/content/out/chunks/manifest.jsonl"),
-                    output_wav_path=Path("/content/out/full.wav"),
-                    language_id="es",
+                logging.basicConfig(
+                    level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
                 )
-                logger.info(
-                    "Configured TextTovoz with manifest schema %s",
-                    manifest.ChunkRecord.__name__,
+                logger = logging.getLogger("texttovoz.notebook")
+                """
+            )
+        ),
+        # ------------------------------------------------------------------
+        # Cell 4 — configuration
+        # ------------------------------------------------------------------
+        nbf.v4.new_code_cell(
+            code(
+                """
+                # Cell 4: configuration constants and TTSConfig instance.
+                HF_HOME = "/content/.cache/huggingface"
+                os.environ["HF_HOME"] = HF_HOME
+
+                MODEL_ID = "ResembleAI/Chatterbox-Multilingual-es-mx-latam"
+                LANGUAGE_ID = "es"
+
+                INPUT_PATH = Path("/content/subtitle.txt")
+                OUTPUT_DIR = Path("/content/out")
+                CHUNKS_DIR = OUTPUT_DIR / "chunks"
+                MANIFEST_PATH = CHUNKS_DIR / "manifest.jsonl"
+                OUTPUT_WAV_PATH = OUTPUT_DIR / "full.wav"
+
+                cfg = TTSConfig(
+                    input_path=INPUT_PATH,
+                    chunks_dir=CHUNKS_DIR,
+                    output_dir=OUTPUT_DIR,
+                    manifest_path=MANIFEST_PATH,
+                    output_wav_path=OUTPUT_WAV_PATH,
+                    language_id=LANGUAGE_ID,
+                    model_id=MODEL_ID,
                 )
+                logger.info("Config: model=%s language=%s", cfg.model_id, cfg.language_id)
                 cfg
                 """
             )
         ),
-        nbf.v4.new_markdown_cell(
-            "## Upload transcript\n\n"
-            "Upload a file named `subtitle.txt`; it will be saved to "
-            "`/content/subtitle.txt`."
-        ),
+        # ------------------------------------------------------------------
+        # Cell 5 — environment verification
+        # ------------------------------------------------------------------
         nbf.v4.new_code_cell(
             code(
                 """
+                # Cell 5: verify Python, GPU, and that the local package is reachable.
+                import importlib.util
+
+                import torch
+
+                if sys.version_info[:2] < (3, 10):
+                    raise RuntimeError(
+                        f"Python 3.10+ required. Runtime is {sys.version.split()[0]}."
+                    )
+                if not torch.cuda.is_available():
+                    raise RuntimeError(
+                        "No CUDA GPU detected. In Colab: "
+                        "Runtime > Change runtime type > T4 GPU."
+                    )
+                tv_spec = importlib.util.find_spec("texttovoz")
+                if tv_spec is None:
+                    raise RuntimeError(
+                        "texttovoz package not importable. Re-run Cells 1 and 2."
+                    )
+
+                logger.info("Python %s", sys.version.split()[0])
+                logger.info("GPU: %s", torch.cuda.get_device_name(0))
+                logger.info("texttovoz at: %s", tv_spec.origin)
+                """
+            )
+        ),
+        # ------------------------------------------------------------------
+        # Cell 6 — pre-warm Hugging Face cache
+        # ------------------------------------------------------------------
+        nbf.v4.new_code_cell(
+            code(
+                """
+                # Cell 6: pre-warm the Hugging Face cache so the model weights
+                # are on local disk before the first TTS call.
+                logger.info("Downloading %s to %s", MODEL_ID, HF_HOME)
+                snapshot_download(repo_id=MODEL_ID, cache_dir=HF_HOME)
+                logger.info("Model ready.")
+                """
+            )
+        ),
+        # ------------------------------------------------------------------
+        # Cell 7 — markdown: upload transcript
+        # ------------------------------------------------------------------
+        nbf.v4.new_markdown_cell(
+            "## Upload transcript\n\n"
+            "Upload a file named `subtitle.txt` (Colab may rename re-uploads to "
+            "`subtitle (1).txt`; the cell accepts any `.txt`)."
+        ),
+        # ------------------------------------------------------------------
+        # Cell 8 — upload widget
+        # ------------------------------------------------------------------
+        nbf.v4.new_code_cell(
+            code(
+                """
+                # Cell 8: upload widget. Accepts any .txt file and prefers one
+                # whose name contains "subtitle" to handle Colab's rename.
                 from google.colab import files
 
                 uploaded = files.upload()
                 if not uploaded:
                     raise RuntimeError("Upload was cancelled or produced no files.")
 
-                # Colab may rename a re-uploaded file (e.g. 'subtitle (1).txt'),
-                # so accept any *.txt or matching prefix.
                 candidates = [k for k in uploaded if k.lower().endswith(".txt")]
                 if not candidates:
                     raise RuntimeError(
@@ -373,34 +257,31 @@ def build_notebook() -> nbf.NotebookNode:
                 chosen = next(
                     (k for k in candidates if "subtitle" in k.lower()), candidates[0]
                 )
-                logger.info("Using uploaded file: %s", chosen)
-                Path("/content/subtitle.txt").write_bytes(uploaded[chosen])
-                logger.info("Saved transcript to /content/subtitle.txt")
+                INPUT_PATH.write_bytes(uploaded[chosen])
+                logger.info("Saved transcript: %s (%d bytes)", chosen, len(uploaded[chosen]))
                 """
             )
         ),
+        # ------------------------------------------------------------------
+        # Cell 9 — preview (first 2 chunks)
+        # ------------------------------------------------------------------
         nbf.v4.new_code_cell(
             code(
                 """
-                from dataclasses import replace
-
-                from IPython.display import Audio, display
-
+                # Cell 9: generate the first 2 chunks so the user can sanity-check
+                # prosody before committing to the full run.
+                preview_dir = OUTPUT_DIR / "preview"
                 preview_cfg = replace(
                     cfg,
-                    output_dir=Path("/content/out/preview"),
-                    chunks_dir=Path("/content/out/preview/chunks"),
-                    manifest_path=Path("/content/out/preview/chunks/manifest.jsonl"),
-                    output_wav_path=Path("/content/out/preview/full.wav"),
+                    chunks_dir=preview_dir / "chunks",
+                    output_dir=preview_dir,
+                    manifest_path=preview_dir / "chunks" / "manifest.jsonl",
+                    output_wav_path=preview_dir / "full.wav",
                     to_chunk=2,
-                )
-                logger.info(
-                    "Generating the first %s chunks for a prosody preview.",
-                    preview_cfg.to_chunk,
                 )
                 preview_result = pipeline.run(preview_cfg)
                 logger.info(
-                    "Preview generated=%s skipped=%s errors=%s",
+                    "Preview done: generated=%d skipped=%d errors=%d",
                     preview_result.generated,
                     preview_result.skipped,
                     preview_result.errors,
@@ -409,42 +290,51 @@ def build_notebook() -> nbf.NotebookNode:
                 """
             )
         ),
+        # ------------------------------------------------------------------
+        # Cell 10 — full run
+        # ------------------------------------------------------------------
         nbf.v4.new_code_cell(
             code(
                 """
+                # Cell 10: full TTS run over every chunk.
                 import tqdm
 
-                logger.info("Starting full TextTovoz run; package logs chunk progress.")
+                logger.info("Starting full TextTovoz run.")
                 with tqdm.tqdm(total=1, desc="TextTovoz full pipeline") as progress:
                     result = pipeline.run(cfg)
                     progress.update(1)
-
                 logger.info(
-                    "Full run complete: total=%s selected=%s generated=%s skipped=%s errors=%s",
+                    "Full run complete: total=%d selected=%d generated=%d skipped=%d errors=%d",
                     result.chunks_total,
                     result.chunks_selected,
                     result.generated,
                     result.skipped,
                     result.errors,
                 )
-                result
                 """
             )
         ),
+        # ------------------------------------------------------------------
+        # Cell 11 — export and inline audio playback
+        # ------------------------------------------------------------------
         nbf.v4.new_code_cell(
             code(
                 """
-                final_wav = Path("/content/out/full.wav")
-                if not final_wav.exists():
-                    raise FileNotFoundError("Expected final WAV at /content/out/full.wav")
-
-                logger.info("Final WAV ready at %s", final_wav)
-                display(Audio("/content/out/full.wav"))
+                # Cell 11: verify the final WAV exists and play it inline.
+                if not OUTPUT_WAV_PATH.exists():
+                    raise FileNotFoundError(f"Expected final WAV at {OUTPUT_WAV_PATH}")
+                logger.info("Final WAV ready: %s", OUTPUT_WAV_PATH)
+                display(Audio(str(OUTPUT_WAV_PATH)))
                 """
             )
         ),
+        # ------------------------------------------------------------------
+        # Cell 12 — disclaimer
+        # ------------------------------------------------------------------
         nbf.v4.new_markdown_cell(
-            "---\n\n**Personal use only. AI-generated audio. Do not redistribute generated audio.**"
+            "---\n\n"
+            "**Personal use only. AI-generated audio. Do not redistribute "
+            "generated audio.**"
         ),
     ]
     return notebook
