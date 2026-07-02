@@ -89,22 +89,22 @@ def build_notebook() -> nbf.NotebookNode:
                         ]
                     )
 
-                # Ensure a fresh, complete clone every run. Reusing a partial
-                # clone is the most common cause of the
-                # 'texttovoz package not importable' failure.
+                # Always remove any pre-existing clone and re-clone from scratch.
+                # Reusing a prior clone was the source of the
+                # 'stale tokenize.py with old except clause' failure mode
+                # where a previous Cell 1 left files behind that the new
+                # branch's pip install -e only registered but did not
+                # overwrite on disk.
+                _clone_repo()
+
+                # Last-chance verification: list the directory and bail with a
+                # clear error if the expected files are still missing.
                 required_paths = [
                     REPO_DIR / "src" / "texttovoz" / "__init__.py",
                     REPO_DIR / "src" / "texttovoz" / "tts.py",
                     REPO_DIR / "src" / "texttovoz" / "pipeline.py",
                     REPO_DIR / "pyproject.toml",
                 ]
-                if not all(p.exists() for p in required_paths):
-                    _clone_repo()
-                else:
-                    logger.info("Reusing existing clone at %s", REPO_DIR)
-
-                # Last-chance verification: list the directory and bail with a
-                # clear error if the expected files are still missing.
                 missing = [str(p) for p in required_paths if not p.exists()]
                 if missing:
                     ls = subprocess.check_output(
