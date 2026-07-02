@@ -69,8 +69,14 @@ def build_notebook() -> nbf.NotebookNode:
                 # No logic, no imports, no config — strictly package installation.
                 # This mirrors the convention of a professional Python script:
                 # requirements are declared and installed up front.
+                #
+                # Colab's base image pre-installs a torch/torchvision pair that
+                # is often out of sync with the rest of the ML stack. Uninstall
+                # them first so chatterbox-tts can pin a consistent set.
                 !pip install -q --upgrade pip
-                !pip install -q chatterbox-tts==0.1.7 huggingface_hub soundfile
+                !pip uninstall -y -q torch torchvision torchaudio transformers
+                !pip install -q chatterbox-tts==0.1.7
+                !pip install -q huggingface_hub soundfile
                 !pip install -q 'pydantic>=2' pyyaml tqdm ipython
                 """
             )
