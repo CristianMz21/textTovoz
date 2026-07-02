@@ -13,10 +13,12 @@ _BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+(?=[¿¡A-ZÁÉÍÓÚÜÑ0-9])")
 
 @lru_cache(maxsize=1)
 def _load_spacy_model() -> object | None:
+    # Any failure here (missing dep, binary incompatibility, model not
+    # downloaded) must fall back to the regex path silently.
     try:
         spacy = importlib.import_module("spacy")
         return spacy.load("es_core_news_sm")
-    except (ImportError, OSError):
+    except Exception:
         return None
 
 
