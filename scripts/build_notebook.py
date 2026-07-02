@@ -141,23 +141,48 @@ def build_notebook() -> nbf.NotebookNode:
                     stderr=subprocess.DEVNULL,
                 )
 
-                # 3. Install Colab runtime dependencies. We do this BEFORE the
-                #    editable install so pip can resolve chatterbox-tts first
-                #    (it pulls torch/torchaudio/transformers as transitives).
-                packages = [
-                    "chatterbox-tts==0.1.7",
-                    "torch",
-                    "torchaudio",
-                    "huggingface_hub",
-                    "numpy",
-                    "soundfile",
-                    "pydantic",
-                    "pyyaml",
-                    "tqdm",
-                    "ipython",
-                ]
+                # 3. Uninstall any pre-existing ML stack so chatterbox-tts can
+                #    pin a consistent set of torch/torchvision/torchaudio/
+                #    transformers. A stale torchvision on the Colab base image
+                #    paired with a freshly installed torch causes
+                #    'operator torchvision::nms does not exist' at import time.
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "uninstall",
+                        "-y",
+                        "torch",
+                        "torchvision",
+                        "torchaudio",
+                        "transformers",
+                    ],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+                # 4. Install chatterbox-tts first so it pins the ML stack
+                #    internally to versions it was tested against.
                 subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", *packages]
+                    [sys.executable, "-m", "pip", "install", "chatterbox-tts==0.1.7"]
+                )
+
+                # 5. Other runtime deps that are not in the ML stack.
+                subprocess.check_call(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "huggingface_hub",
+                        "soundfile",
+                        "pydantic",
+                        "pyyaml",
+                        "tqdm",
+                        "ipython",
+                    ]
                 )
 
                 # 4. Install the local package editable, using `cwd` and `.` to
