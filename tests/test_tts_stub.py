@@ -14,16 +14,16 @@ def test_stub_tts_returns_one_second_of_silence(stub_config: TTSConfig) -> None:
     assert len(audio) == stub_config.sample_rate
 
 
-def test_chatterbox_from_pretrained_forwards_model_id(monkeypatch) -> None:
+def test_chatterbox_from_pretrained_forwards_t3_model(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
     class FakeChatterboxMultilingualTTS:
         sr = 24_000
 
         @classmethod
-        def from_pretrained(cls, model_id: str, *, device: str):
-            calls["model_id"] = model_id
+        def from_pretrained(cls, *, device: str, t3_model: str | None = None):
             calls["device"] = device
+            calls["t3_model"] = t3_model
             return cls()
 
         def generate(self, text: str, *, language_id: str, **kwargs):
@@ -36,11 +36,10 @@ def test_chatterbox_from_pretrained_forwards_model_id(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "chatterbox", chatterbox_module)
     monkeypatch.setitem(sys.modules, "chatterbox.mtl_tts", mtl_tts_module)
 
-    model_id = "ResembleAI/Chatterbox-Multilingual-es-mx-latam"
-    config = TTSConfig(model_id=model_id, language_id="es")
-    tts = ChatterboxTTS.from_pretrained(model_id, "es", "cuda", config=config)
+    config = TTSConfig(t3_model="v3", language_id="es")
+    tts = ChatterboxTTS.from_pretrained("es", "cuda", t3_model="v3", config=config)
     tts.generate("Hola")
 
-    assert calls["model_id"] == model_id
     assert calls["device"] == "cuda"
+    assert calls["t3_model"] == "v3"
     assert calls["language_id"] == "es"

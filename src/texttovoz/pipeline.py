@@ -154,9 +154,9 @@ def _load_tts(config: TTSConfig) -> ChatterboxTTS | StubTTS:
     if is_available():
         LOGGER.info("Loading Chatterbox TTS")
         return ChatterboxTTS.from_pretrained(
-            config.model_id,
             config.language_id,
             "cuda",
+            t3_model=config.t3_model,
             config=config,
         )
     LOGGER.warning("Chatterbox unavailable; using StubTTS")

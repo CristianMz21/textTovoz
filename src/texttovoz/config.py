@@ -17,7 +17,8 @@ class TTSConfig:
     output_wav_path: Path = Path("output/full.wav")
     glossary_path: Path = Path(__file__).with_name("data") / "acronyms.yaml"
     hf_home: Path = Path("/content/.cache/huggingface")
-    model_id: str = "ResembleAI/Chatterbox-Multilingual-es-mx-latam"
+    model_id: str = "ResembleAI/chatterbox"
+    t3_model: str = "v3"
     language_id: str = "es"
     sample_rate: int = 24_000
     channels: int = 1

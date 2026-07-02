@@ -1,5 +1,12 @@
 """Lightweight TTS wrappers for Chatterbox and local smoke tests.
 
+Targets chatterbox-tts installed from the master branch (not the 0.1.7
+PyPI release, which hardcodes the English-only model). The master
+API is ``ChatterboxMultilingualTTS.from_pretrained(device, t3_model=...)``
+where ``t3_model`` selects which file inside the unified
+``ResembleAI/chatterbox`` Hugging Face repo to load. For multilingual
+Spanish we use ``t3_model="v3"`` plus ``language_id="es"``.
+
 Chatterbox parameter ranges verified during exploration:
 
 - ``exaggeration``: practical range 0.0-1.0; default 0.5, with ~0.7 useful for
@@ -37,10 +44,13 @@ def is_available() -> bool:
 
 @dataclass(slots=True)
 class ChatterboxTTS:
-    """Thin lazy wrapper around ``ChatterboxMultilingualTTS``.
+    """Thin lazy wrapper around ``ChatterboxMultilingualTTS`` (master API).
 
-    The LatAm Spanish checkpoint is configured through ``model_id`` and expects
-    Chatterbox generation calls to use ``language_id="es"``.
+    Selects a model inside the unified ``ResembleAI/chatterbox`` Hugging
+    Face repo by passing ``t3_model`` (e.g. ``"v3"``). The wrapper itself
+    does not pick a HF repo id; that lives in the chatterbox library.
+    Generation calls always pass ``language_id`` so the model can pick the
+    right tokenizer.
     """
 
     model: _ChatterboxModel
@@ -49,21 +59,25 @@ class ChatterboxTTS:
     @classmethod
     def from_pretrained(
         cls,
-        model_id: str,
         language_id: str,
         device: str,
         *,
+        t3_model: str = "v3",
         config: TTSConfig | None = None,
     ) -> ChatterboxTTS:
-        """Load Chatterbox lazily and forward the configured HF model id.
+        """Load Chatterbox lazily using the master ``from_pretrained`` API.
 
-        ``language_id`` should be ``"es"`` for the configured LatAm Spanish model.
+        ``language_id`` should be a code the multilingual model supports
+        (e.g. ``"es"`` for Spanish). ``t3_model`` selects the checkpoint
+        variant inside the unified HF repo (default ``"v3"``).
         """
 
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
-        effective_config = config or TTSConfig(model_id=model_id, language_id=language_id)
-        model = ChatterboxMultilingualTTS.from_pretrained(model_id, device=device)
+        effective_config = config or TTSConfig(language_id=language_id)
+        model = ChatterboxMultilingualTTS.from_pretrained(
+            device=device, t3_model=t3_model
+        )
         return cls(model=model, config=effective_config)
 
     def generate(self, text: str) -> tuple[Any, int]:
@@ -93,3 +107,4 @@ class StubTTS:
 
         _ = text
         return np.zeros(self.config.sample_rate, dtype=np.float32), self.config.sample_rate
+

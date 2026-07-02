@@ -53,9 +53,9 @@ def build_notebook() -> nbf.NotebookNode:
         # Title
         # ------------------------------------------------------------------
         nbf.v4.new_markdown_cell(
-            "# TextTovoz TTS Pipeline (v3.1 — install/setup/exec split)\n\n"
+            "# TextTovoz TTS Pipeline (v3.2 — Chatterbox master, V3 multilingual)\n\n"
             "**Personal use only. AI-generated audio. Do not redistribute.**\n\n"
-            "_If you do not see the `(v3.1)` marker above, your Colab tab is "
+            "_If you do not see the `(v3.2)` marker above, your Colab tab is "
             "serving a cached older revision. Hard-refresh the browser "
             "(Ctrl+Shift+R) and reopen the notebook._"
         ),
@@ -74,12 +74,13 @@ def build_notebook() -> nbf.NotebookNode:
                 # is often out of sync with the rest of the ML stack. Uninstall
                 # them first, then pin a known-compatible set (torch 2.6.0,
                 # torchvision 0.21.0, torchaudio 2.6.0) before installing
-                # chatterbox-tts, which depends on all four.
+                # chatterbox-tts from the master branch (the 0.1.7 PyPI release
+                # hardcodes the English-only model).
                 !pip install -q --upgrade pip
                 !pip uninstall -y -q torch torchvision torchaudio transformers
                 !pip install -q torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
                 !pip install -q transformers==5.2.0
-                !pip install -q chatterbox-tts==0.1.7
+                !pip install -q 'chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@main'
                 !pip install -q huggingface_hub soundfile
                 !pip install -q 'pydantic>=2' pyyaml tqdm ipython
                 """
@@ -168,7 +169,11 @@ def build_notebook() -> nbf.NotebookNode:
                 HF_HOME = "/content/.cache/huggingface"
                 os.environ["HF_HOME"] = HF_HOME
 
-                MODEL_ID = "ResembleAI/Chatterbox-Multilingual-es-mx-latam"
+                # Unified HF repo that holds all Chatterbox multilingual
+                # variants (V2, V3, language packs). The specific checkpoint
+                # is selected by t3_model at from_pretrained time.
+                MODEL_ID = "ResembleAI/chatterbox"
+                T3_MODEL = "v3"  # Multilingual V3 (broad coverage, 23+ langs)
                 LANGUAGE_ID = "es"
 
                 INPUT_PATH = Path("/content/subtitle.txt")
@@ -185,8 +190,12 @@ def build_notebook() -> nbf.NotebookNode:
                     output_wav_path=OUTPUT_WAV_PATH,
                     language_id=LANGUAGE_ID,
                     model_id=MODEL_ID,
+                    t3_model=T3_MODEL,
                 )
-                logger.info("Config: model=%s language=%s", cfg.model_id, cfg.language_id)
+                logger.info(
+                    "Config: model=%s t3_model=%s language=%s",
+                    cfg.model_id, cfg.t3_model, cfg.language_id,
+                )
                 cfg
                 """
             )
