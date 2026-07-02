@@ -72,9 +72,12 @@ def build_notebook() -> nbf.NotebookNode:
                 #
                 # Colab's base image pre-installs a torch/torchvision pair that
                 # is often out of sync with the rest of the ML stack. Uninstall
-                # them first so chatterbox-tts can pin a consistent set.
+                # them first, then pin a known-compatible set (torch 2.6.0,
+                # torchvision 0.21.0, torchaudio 2.6.0) before installing
+                # chatterbox-tts, which depends on all four.
                 !pip install -q --upgrade pip
                 !pip uninstall -y -q torch torchvision torchaudio transformers
+                !pip install -q torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
                 !pip install -q chatterbox-tts==0.1.7
                 !pip install -q huggingface_hub soundfile
                 !pip install -q 'pydantic>=2' pyyaml tqdm ipython
