@@ -42,3 +42,10 @@ select = ["E", "F", "I", "B", "UP"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[tool.ruff.lint.per-file-ignores]
+# Jupyter notebooks are runtime scripts, not library code. The unused
+# imports in cell 4 are used in later cells and the version check is
+# project-correct.
+"notebooks/*.ipynb" = ["F401", "UP036"]
+"scripts/build_notebook.py" = ["E501"]  # long pip lines are fine

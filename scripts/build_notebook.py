@@ -179,6 +179,7 @@ def build_notebook() -> nbf.NotebookNode:
             code(
                 """
                 # Cell 4: configuration constants and TTSConfig instance.
+                # (TTSConfig is already imported in Cell 3.)
                 HF_HOME = "/content/.cache/huggingface"
                 os.environ["HF_HOME"] = HF_HOME
 
@@ -363,9 +364,7 @@ def build_notebook() -> nbf.NotebookNode:
         # Cell 12 — disclaimer
         # ------------------------------------------------------------------
         nbf.v4.new_markdown_cell(
-            "---\n\n"
-            "**Personal use only. AI-generated audio. Do not redistribute "
-            "generated audio.**"
+            "---\n\n**Personal use only. AI-generated audio. Do not redistribute generated audio.**"
         ),
     ]
     return notebook

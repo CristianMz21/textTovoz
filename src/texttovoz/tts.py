@@ -108,4 +108,3 @@ class StubTTS:
 
         _ = text
         return np.zeros(self.config.sample_rate, dtype=np.float32), self.config.sample_rate
-
