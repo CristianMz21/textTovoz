@@ -220,7 +220,7 @@ def build_notebook() -> nbf.NotebookNode:
                 # right here. This makes the cell robust on its own.
                 if importlib.util.find_spec("texttovoz") is None:
                     REPO_URL = "https://github.com/CristianMz21/textTovoz.git"
-REPO_BRANCH = "main"
+                    REPO_BRANCH = "main"
                     REPO_DIR = Path("/content/textTovoz")
                     if not (REPO_DIR / "src" / "texttovoz" / "__init__.py").exists():
                         logger.info(
