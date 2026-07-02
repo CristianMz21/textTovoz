@@ -80,7 +80,7 @@ def build_notebook() -> nbf.NotebookNode:
                 !pip uninstall -y -q torch torchvision torchaudio transformers
                 !pip install -q torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
                 !pip install -q transformers==5.2.0
-                !pip install -q 'chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@main'
+                !pip install -q 'chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@master'
                 !pip install -q huggingface_hub soundfile
                 !pip install -q 'pydantic>=2' pyyaml tqdm ipython
                 """
